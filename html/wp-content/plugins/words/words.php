@@ -1,47 +1,94 @@
 <?php
 /**
- * @package Words
- * @version 0.0.1
+ * Plugin Name: Words
+ * Description: This plugin changes swearing words on your site to *****
+ * Version: 0.0.1
+ * Author: Marcos Avendaño
+ * Author URI: http://asociacion.LexicorrecionAnonima.com
  */
-/*
-Plugin Name: Words
-Plugin URI: http://wordpress.org/plugins/words/
-Description: This is a fantastic plugin that will change your life.that plugin will change all the swearing words in your site for *****.
-Author: Marcos Avendaño
-Version: 0.0.1
-Author URI: http://asociacion.LexicorrecionAnonima.com
-*/
 
-//Funcion que cambia la palabra wordpress por wordpressDAm
-function words_get_lyric() {
+// Acciones durante la activación del plugin
+register_activation_hook(__FILE__, 'create_marcos_words_table');
+register_activation_hook(__FILE__, 'insert_bad_words');
 
-    $lyrics = "wordpress,php,Ostia,Hijos de Perra,Puta,Cabronazo,Idiota,Estupido,polla,Gilipollas"; // Aquí podrías tener un array de palabras separadas por comas o espacios, por ejemplo: "wordpress,php,coding"
-    $lyrics = explode( ",", $lyrics ); // Separa las palabras usando la coma como delimitador (puedes cambiarlo si las palabras están separadas por otro caracter)
-    return wptexturize( $lyrics[ mt_rand( 0, count( $lyrics ) - 1 ) ] );
+// Función que crea la tabla para almacenar las palabras a reemplazar
+function create_marcos_words_table() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'marcosWords';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        time datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+        word tinytext NOT NULL,
+        replacement TEXT NOT NULL,
+        UNIQUE KEY id (id)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
 }
 
-function renym_wordpress_typo_fix( $text ) {
-    $words_to_replace = array(
-        'wordpress' => 'WordPressDAM',
-        'php' => 'PHPDAM',
-        'Ostia' => 'Os***',
-        'Hijos de Perra' => 'Hijos de P***',
-        'Puta' => 'P***',
-        'Cabronazo' => 'Cabron***',
-        'Idiota' => 'Estolido',
-        'Estupido' => 'necio',
-        'polla' => 'pito',
-        'Gilipollas' => 'Mamarracho',
+// Función para insertar palabras malsonantes y sus reemplazos en la tabla
+function insert_bad_words() {
+    $bad_words = array(
+        'Ostia' => 'Ost***',
+        'Hijos de Pera' => 'Hijos de P***',
+        'PSOE' => 'Ladrones',
+        'PP' => 'Consercadores no tan Ladrones',
+        'Podemos' => 'Comunistas',
+        'Ciudadanos' => 'Liberales',
+        'Vox' => 'VIVA ESPAÑA VIVA VOX',
+        'Pablo Iglesias' => 'HIJO DE PUTA',
+        'Perra' => 'CANINA',
+        'Puta' => 'PROMISCUA',
+        'Cabronazo' => 'CABRON',
+        'Idiota' => 'ESTOLIDO',
+        'philosophy' => 'thinking',
 
-        // Agrega más palabras y sus reemplazos aquí según tus necesidades
+
+        // Agrega más palabras malsonantes y sus reemplazos según sea necesario
     );
 
-    foreach ($words_to_replace as $word => $replacement) {
-        $text = str_ireplace($word, $replacement, $text);
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'marcosWords';
+
+    foreach ($bad_words as $word => $replacement) {
+        // Verificar si la palabra ya existe en la tabla
+        $existing_word = $wpdb->get_var($wpdb->prepare(
+            "SELECT word FROM $table_name WHERE word = %s",
+            $word
+        ));
+
+        if (!$existing_word) {
+            // Si la palabra no existe, insertarla en la tabla
+            $wpdb->insert(
+                $table_name,
+                array(
+                    'time' => current_time('mysql'),
+                    'word' => $word,
+                    'replacement' => $replacement,
+                )
+            );
+        }
+    }
+}
+
+
+// Función para reemplazar palabras en el contenido
+function renym_wordpress_typo_fix($text) {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'marcosWords';
+    $results = $wpdb->get_results("SELECT word, replacement FROM $table_name", ARRAY_A);
+
+    if ($results) {
+        foreach ($results as $row) {
+            $word = $row['word'];
+            $replacement = $row['replacement'];
+            $text = str_ireplace($word, $replacement, $text);
+        }
     }
 
     return $text;
 }
-
-add_filter( 'the_content', 'renym_wordpress_typo_fix' );
-
+add_filter('the_content', 'renym_wordpress_typo_fix');
